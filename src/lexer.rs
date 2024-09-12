@@ -38,7 +38,7 @@ impl<'a> Lexer<'a> {
                 c if c.is_whitespace() || *c == '\n' => {
                     Ok(Some(Token::WhiteSpace))
                 },
-                'n' => Ok(self.parse_null()),
+                'n' => Ok(Some(self.parse_null().unwrap())),
                 _ => Err(JsonPretError::LexerError(
                     LexerError::new(&format!("an unexpected char {}", c))
                 )),
@@ -47,8 +47,25 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn parse_null(&mut self) -> Option<Token> {
-        Some(Token::Null)
+    fn parse_null(&mut self) -> Result<Token, JsonPretError> {
+        let mut token_str: String = String::new();
+        // 4文字読み込み
+        for _ in (0..4) {
+            match self.chars.next() {
+                Some(c) => token_str.push(c),
+                None => {}
+            }
+        }
+        
+        // 読み込んだ文字が "null" の場合、Token を返す。
+        if &token_str == "null" {
+            Ok(Token::Null)
+        } else {
+            Err(JsonPretError::LexerError(
+                LexerError::new(&format!("'{token_str}' is syntactically incorrect."))
+            ))
+        }
+        
     }
 }
 
