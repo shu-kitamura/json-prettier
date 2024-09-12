@@ -34,10 +34,11 @@ impl<'a> Lexer<'a> {
     /// 文字列を読み込み、マッチしたTokenを返す
     fn next_token(&mut self) -> Result<Option<Token>, JsonPretError> {
         match self.chars.peek() {
-            Some(c) => match c {
-                c if c.is_whitespace() || *c == '\n' => {
+            Some(c) => match *c {
+                c if c.is_whitespace() || c == '\n' => {
                     Ok(Some(Token::WhiteSpace))
                 },
+//                't' | 'f' => Ok(Some(*self.parse_boolean(*c).unwrap())),
                 'n' => Ok(Some(self.parse_null().unwrap())),
                 _ => Err(JsonPretError::LexerError(
                     LexerError::new(&format!("an unexpected char {}", c))
@@ -48,24 +49,46 @@ impl<'a> Lexer<'a> {
     }
 
     fn parse_null(&mut self) -> Result<Token, JsonPretError> {
-        let mut token_str: String = String::new();
-        // 4文字読み込み
-        for _ in (0..4) {
-            match self.chars.next() {
-                Some(c) => token_str.push(c),
-                None => {}
-            }
-        }
+        // 4文字取得
+        let string: String = self.get_string(4);
         
         // 読み込んだ文字が "null" の場合、Token を返す。
-        if &token_str == "null" {
+        if &string == "null" {
             Ok(Token::Null)
         } else {
             Err(JsonPretError::LexerError(
-                LexerError::new(&format!("'{token_str}' is syntactically incorrect."))
+                LexerError::new(&format!("'{string}' is syntactically incorrect."))
             ))
         }
-        
+    }
+
+    fn parse_boolean(&mut self, c: char) -> Result<Token, JsonPretError> {
+        let (length, boolean) =  match c {
+            't' => (4, true),
+            'f' => (5, false),
+            _ => unreachable!()
+        };
+
+        let string: String = self.get_string(length);
+        if &string == "true" || &string == "false" {
+            Ok(Token::Bool(boolean))
+        } else {
+            Err(JsonPretError::LexerError(
+                LexerError::new(&format!("'{string}' is syntactically incorrect."))
+            ))
+        }
+    }
+
+    /// 指定した文字数を取得する
+    fn get_string(&mut self, length: usize) -> String {
+        let mut str: String = String::new();
+        for _ in 0..length {
+            match self.chars.next() {
+                Some(c) => str.push(c),
+                None => {}
+            }
+        }
+        str
     }
 }
 
@@ -73,7 +96,7 @@ impl<'a> Lexer<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::lexer::{Lexer, Token};
+    use crate::{error::{JsonPretError, LexerError}, lexer::{self, Lexer, Token}};
 
     #[test]
     fn test_lexer_new() {
@@ -87,8 +110,58 @@ mod tests {
         }
     }
 
+    // #[test]
+    // fn test_next_token() {
+    //     let expect = Token::LeftBrace;
+    // }
+
     #[test]
-    fn test_next_token() {
-        let expect = Token::LeftBrace;
+    fn test_parse_null() {
+        let expect = Token::Null;
+        let mut lexer = Lexer::new("null");        
+        let actual = lexer.parse_null().unwrap();
+
+        assert_eq!(actual, expect);
+    }
+
+    #[test]
+    fn test_get_string() {
+        let expect = String::from("test");
+        let mut lexer = Lexer::new("test");
+        let actual = lexer.get_string(4);
+        assert_eq!(actual, expect);
+    }
+
+    #[test]
+    fn test_parse_boolean() {
+        // true のケース
+        let expect_true = Token::Bool(true);
+        let mut lexer_true = Lexer::new("true");
+        let actual_true = lexer_true.parse_boolean('t').unwrap();
+        assert_eq!(actual_true, expect_true);
+
+        // false のケース
+        let expect_false = Token::Bool(false);
+        let mut lexer_false = Lexer::new("false");
+        let actual_false = lexer_false.parse_boolean('f').unwrap();
+        assert_eq!(actual_false, expect_false);
+
+        // t で true 以外の文字のケース(エラー)
+        let err_str_t = "test";
+        let expect_err_t = JsonPretError::LexerError(
+            LexerError::new(&format!("'{err_str_t}' is syntactically incorrect."))
+        );
+        let mut lexer_err_t = Lexer::new(&err_str_t);
+        let actual_err_t = lexer_err_t.parse_boolean('t').unwrap_err();
+        assert_eq!(actual_err_t, expect_err_t);
+
+        // f で false 以外の文字のケース(エラー)
+        let err_str_f = "fight";
+        let expect_err_f = JsonPretError::LexerError(
+            LexerError::new(&format!("'{err_str_f}' is syntactically incorrect."))
+        );
+        let mut lexer_err_f = Lexer::new(&err_str_f);
+        let actual_err_f = lexer_err_f.parse_boolean('f').unwrap_err();
+        assert_eq!(actual_err_f, expect_err_f);
     }
 }
