@@ -35,9 +35,14 @@ impl<'a> Lexer<'a> {
     fn next_token(&mut self) -> Result<Option<Token>, JsonPretError> {
         match self.chars.peek() {
             Some(c) => match c {
-                c if c.is_whitespace() || *c == '\n' => {
-                    Ok(Some(Token::WhiteSpace))
-                },
+                c if c.is_whitespace() || *c == '\n' => Ok(Some(self.get_token(Token::WhiteSpace))),
+                c if is_number(*c, true) => Ok(Some(self.parse_number().unwrap())),
+                '{' => Ok(Some(self.get_token(Token::LeftBrace))),
+                '}' => Ok(Some(self.get_token(Token::RightBrace))),
+                '[' => Ok(Some(self.get_token(Token::LeftBracket))),
+                ']' => Ok(Some(self.get_token(Token::RightBracket))),
+                ',' => Ok(Some(self.get_token(Token::Comma))),
+                ':' => Ok(Some(self.get_token(Token::Colon))),
                 't' => Ok(Some(self.parse_boolean(true).unwrap())),
                 'f' => Ok(Some(self.parse_boolean(false).unwrap())),
                 'n' => Ok(Some(self.parse_null().unwrap())),
@@ -49,10 +54,15 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    fn get_token(&mut self, token: Token) -> Token {
+        self.chars.next();
+        token
+    } 
+
     fn parse_number(&mut self) -> Result<Token, JsonPretError>{
         let mut number_str: String = String::new();
         while let Some(&c) = self.chars.peek() {
-            if c.is_numeric() || matches!(c, '+' | '-' | 'e' | 'E' | '.') {
+            if is_number(c, false) {
                 self.chars.next();
                 number_str.push(c);
             } else {
@@ -69,12 +79,12 @@ impl<'a> Lexer<'a> {
     }
 
     fn parse_boolean(&mut self, b: bool) -> Result<Token, JsonPretError> {
-        let length: usize =  match b {
-            true => 4,
-            false => 5,
+        // true の場合は4文字、falseの場合は5文字取得
+        let string: String =  match b {
+            true => self.get_string(4),
+            false => self.get_string(5),
         };
 
-        let string: String = self.get_string(length);
         if &string == "true" || &string == "false" {
             Ok(Token::Bool(b))
         } else {
@@ -111,11 +121,21 @@ impl<'a> Lexer<'a> {
     }
 }
 
+/// Numberで使用される文字([0-9], +, -, .)かどうかを返す。  
+fn is_number(c: char, is_prefix: bool) -> bool {
+    if is_prefix {
+        c.is_numeric() || matches!(c, '+' | '-' | '.')
+    } else {
+        c.is_numeric() || matches!(c, '+' | '-' | 'e' | 'E' | '.')
+
+    }
+}
+
 // --- テストコード ---
 
 #[cfg(test)]
 mod tests {
-    use crate::{error::{JsonPretError, LexerError}, lexer::{self, Lexer, Token}};
+    use crate::{error::{JsonPretError, LexerError}, lexer::{Lexer, Token, is_number}};
 
     #[test]
     fn test_lexer_new() {
@@ -191,5 +211,14 @@ mod tests {
         let mut lexer = Lexer::new("test");
         let actual = lexer.get_string(4);
         assert_eq!(actual, expect);
+    }
+
+    #[test]
+    fn test_is_number() {
+        assert_eq!(is_number('1', true), true);
+        assert_eq!(is_number('+', true), true);
+        assert_eq!(is_number('e', true), false);
+        assert_eq!(is_number('e', false), true);
+        assert_eq!(is_number('a', false), false);
     }
 }
