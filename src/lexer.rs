@@ -49,16 +49,21 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn parse_null(&mut self) -> Result<Token, JsonPretError> {
-        // 4文字取得
-        let string: String = self.get_string(4);
-        
-        // 読み込んだ文字が "null" の場合、Token を返す。
-        if &string == "null" {
-            Ok(Token::Null)
-        } else {
-            Err(JsonPretError::LexerError(
-                LexerError::new(&format!("'{string}' is syntactically incorrect."))
+    fn parse_number(&mut self) -> Result<Token, JsonPretError>{
+        let mut number_str: String = String::new();
+        while let Some(&c) = self.chars.peek() {
+            if c.is_numeric() || matches!(c, '+' | '-' | 'e' | 'E' | '.') {
+                self.chars.next();
+                number_str.push(c);
+            } else {
+                break;
+            }
+        }
+
+        match number_str.parse::<f64>() {
+            Ok(number) => Ok(Token::Number(number)),
+            Err(e) => Err(JsonPretError::LexerError(
+                LexerError::new(&e.to_string()),
             ))
         }
     }
@@ -72,6 +77,20 @@ impl<'a> Lexer<'a> {
         let string: String = self.get_string(length);
         if &string == "true" || &string == "false" {
             Ok(Token::Bool(b))
+        } else {
+            Err(JsonPretError::LexerError(
+                LexerError::new(&format!("'{string}' is syntactically incorrect."))
+            ))
+        }
+    }
+
+    fn parse_null(&mut self) -> Result<Token, JsonPretError> {
+        // 4文字取得
+        let string: String = self.get_string(4);
+        
+        // 読み込んだ文字が "null" の場合、Token を返す。
+        if &string == "null" {
+            Ok(Token::Null)
         } else {
             Err(JsonPretError::LexerError(
                 LexerError::new(&format!("'{string}' is syntactically incorrect."))
@@ -116,22 +135,14 @@ mod tests {
     // }
 
     #[test]
-    fn test_parse_null() {
-        let expect = Token::Null;
-        let mut lexer = Lexer::new("null");        
-        let actual = lexer.parse_null().unwrap();
+    fn test_parse_number() {
+        let expect = Token::Number(1.0);
+        let mut lexer = Lexer::new("1.0");
+        let actual = lexer.parse_number().unwrap();
 
-        assert_eq!(actual, expect);
+        assert_eq!(actual, expect)
     }
-
-    #[test]
-    fn test_get_string() {
-        let expect = String::from("test");
-        let mut lexer = Lexer::new("test");
-        let actual = lexer.get_string(4);
-        assert_eq!(actual, expect);
-    }
-
+ 
     #[test]
     fn test_parse_boolean() {
         // true のケース
@@ -163,5 +174,22 @@ mod tests {
         let mut lexer_err_f = Lexer::new(&err_str_f);
         let actual_err_f = lexer_err_f.parse_boolean(false).unwrap_err();
         assert_eq!(actual_err_f, expect_err_f);
+    }
+
+    #[test]
+    fn test_parse_null() {
+        let expect = Token::Null;
+        let mut lexer = Lexer::new("null");        
+        let actual = lexer.parse_null().unwrap();
+
+        assert_eq!(actual, expect);
+    }
+
+    #[test]
+    fn test_get_string() {
+        let expect = String::from("test");
+        let mut lexer = Lexer::new("test");
+        let actual = lexer.get_string(4);
+        assert_eq!(actual, expect);
     }
 }
