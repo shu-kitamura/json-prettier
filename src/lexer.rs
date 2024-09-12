@@ -34,11 +34,12 @@ impl<'a> Lexer<'a> {
     /// 文字列を読み込み、マッチしたTokenを返す
     fn next_token(&mut self) -> Result<Option<Token>, JsonPretError> {
         match self.chars.peek() {
-            Some(c) => match *c {
-                c if c.is_whitespace() || c == '\n' => {
+            Some(c) => match c {
+                c if c.is_whitespace() || *c == '\n' => {
                     Ok(Some(Token::WhiteSpace))
                 },
-//                't' | 'f' => Ok(Some(*self.parse_boolean(*c).unwrap())),
+                't' => Ok(Some(self.parse_boolean('t').unwrap())),
+                'f' => Ok(Some(self.parse_boolean('f').unwrap())),
                 'n' => Ok(Some(self.parse_null().unwrap())),
                 _ => Err(JsonPretError::LexerError(
                     LexerError::new(&format!("an unexpected char {}", c))
