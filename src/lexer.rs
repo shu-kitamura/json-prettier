@@ -1,6 +1,5 @@
 use std::{
-    iter::Peekable,
-    str::Chars
+    f32::consts::E, iter::Peekable, str::Chars
 };
 use crate::error::{JsonPretError, LexerError};
 
@@ -106,6 +105,35 @@ impl<'a> Lexer<'a> {
                 LexerError::new(&format!("'{string}' is syntactically incorrect."))
             ))
         }
+    }
+
+    fn parse_string(&mut self) -> Result<Token, JsonPretError>{
+        self.chars.next(); // 最初の " の分を進める。
+
+        let mut utf16: Vec<u16> = vec![];
+        let mut string = String::new();
+
+        while let Some(c) = self.chars.next() {
+            match c {
+                '\\' => {
+                    let escaped_c = self.chars.next().unwrap();
+                    match escaped_c {
+                        '"' | '\\' | '/' | 'b' | 'f' | 'n' | 'r' | 't' => {
+                            // エスケープ文字の時の処理
+                        }
+                        'u' => {
+                            // utf16の時の処理
+                        }
+                        _ => return Err(JsonPretError::LexerError(
+                            LexerError::new(&format!("an unexpected escaped char {escaped_c}"))
+                        ))
+                    }
+                }
+                '"' => {},
+                _ => {}
+            }
+        }
+        Ok(Token::String(string))
     }
 
     /// 指定した文字数を取得する
