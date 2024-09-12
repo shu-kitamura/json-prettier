@@ -38,8 +38,8 @@ impl<'a> Lexer<'a> {
                 c if c.is_whitespace() || *c == '\n' => {
                     Ok(Some(Token::WhiteSpace))
                 },
-                't' => Ok(Some(self.parse_boolean('t').unwrap())),
-                'f' => Ok(Some(self.parse_boolean('f').unwrap())),
+                't' => Ok(Some(self.parse_boolean(true).unwrap())),
+                'f' => Ok(Some(self.parse_boolean(false).unwrap())),
                 'n' => Ok(Some(self.parse_null().unwrap())),
                 _ => Err(JsonPretError::LexerError(
                     LexerError::new(&format!("an unexpected char {}", c))
@@ -63,16 +63,15 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn parse_boolean(&mut self, c: char) -> Result<Token, JsonPretError> {
-        let (length, boolean) =  match c {
-            't' => (4, true),
-            'f' => (5, false),
-            _ => unreachable!()
+    fn parse_boolean(&mut self, b: bool) -> Result<Token, JsonPretError> {
+        let length: usize =  match b {
+            true => 4,
+            false => 5,
         };
 
         let string: String = self.get_string(length);
         if &string == "true" || &string == "false" {
-            Ok(Token::Bool(boolean))
+            Ok(Token::Bool(b))
         } else {
             Err(JsonPretError::LexerError(
                 LexerError::new(&format!("'{string}' is syntactically incorrect."))
@@ -138,13 +137,13 @@ mod tests {
         // true のケース
         let expect_true = Token::Bool(true);
         let mut lexer_true = Lexer::new("true");
-        let actual_true = lexer_true.parse_boolean('t').unwrap();
+        let actual_true = lexer_true.parse_boolean(true).unwrap();
         assert_eq!(actual_true, expect_true);
 
         // false のケース
         let expect_false = Token::Bool(false);
         let mut lexer_false = Lexer::new("false");
-        let actual_false = lexer_false.parse_boolean('f').unwrap();
+        let actual_false = lexer_false.parse_boolean(false).unwrap();
         assert_eq!(actual_false, expect_false);
 
         // t で true 以外の文字のケース(エラー)
@@ -153,7 +152,7 @@ mod tests {
             LexerError::new(&format!("'{err_str_t}' is syntactically incorrect."))
         );
         let mut lexer_err_t = Lexer::new(&err_str_t);
-        let actual_err_t = lexer_err_t.parse_boolean('t').unwrap_err();
+        let actual_err_t = lexer_err_t.parse_boolean(true).unwrap_err();
         assert_eq!(actual_err_t, expect_err_t);
 
         // f で false 以外の文字のケース(エラー)
@@ -162,7 +161,7 @@ mod tests {
             LexerError::new(&format!("'{err_str_f}' is syntactically incorrect."))
         );
         let mut lexer_err_f = Lexer::new(&err_str_f);
-        let actual_err_f = lexer_err_f.parse_boolean('f').unwrap_err();
+        let actual_err_f = lexer_err_f.parse_boolean(false).unwrap_err();
         assert_eq!(actual_err_f, expect_err_f);
     }
 }
