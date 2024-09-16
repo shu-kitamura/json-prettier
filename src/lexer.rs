@@ -1,5 +1,6 @@
 use std::{
-    f32::consts::E, iter::Peekable, str::Chars
+    iter::Peekable,
+    str::Chars
 };
 use crate::error::{JsonPretError, LexerError};
 
@@ -30,6 +31,17 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    fn lexical_analyze(&mut self) -> Result<Vec<Token>, JsonPretError> {
+        let mut tokens: Vec<Token> = vec![];
+        while let Some(token) = self.next_token().unwrap() {
+            match token {
+                Token::WhiteSpace => {}
+                _ => tokens.push(token),
+            }
+        }
+        Ok(tokens)
+    }
+
     /// 文字列を読み込み、マッチしたTokenを返す
     fn next_token(&mut self) -> Result<Option<Token>, JsonPretError> {
         match self.chars.peek() {
@@ -42,6 +54,7 @@ impl<'a> Lexer<'a> {
                 ']' => Ok(Some(self.get_token(Token::RightBracket))),
                 ',' => Ok(Some(self.get_token(Token::Comma))),
                 ':' => Ok(Some(self.get_token(Token::Colon))),
+                '"' => Ok(Some(self.parse_string().unwrap())),
                 't' => Ok(Some(self.parse_boolean(true).unwrap())),
                 'f' => Ok(Some(self.parse_boolean(false).unwrap())),
                 'n' => Ok(Some(self.parse_null().unwrap())),
@@ -117,20 +130,54 @@ impl<'a> Lexer<'a> {
             match c {
                 '\\' => {
                     let escaped_c = self.chars.next().unwrap();
+                    println!("{escaped_c}");
                     match escaped_c {
                         '"' | '\\' | '/' | 'b' | 'f' | 'n' | 'r' | 't' => {
                             // エスケープ文字の時の処理
+                            match self.push_utf16(&mut string, &mut utf16) {
+                                Ok(()) => string.push_str(&format!("\\{escaped_c}")),
+                                Err(e) => return Err(e)
+                            }
                         }
                         'u' => {
                             // utf16の時の処理
+                            let hexs: Vec<char> = (0..4).filter_map(|_| {
+                                let c: char = self.chars.next().unwrap();
+                                if c.is_ascii_hexdigit() {
+                                    Some(c)
+                                } else {
+                                    None
+                                }
+                            }).collect();
+
+                            // 読み込んだ文字列を16新数に変換して、utf16のバッファにpushする
+                            match u16::from_str_radix(&hexs.iter().collect::<String>(), 16) {
+                                Ok(code_point) => utf16.push(code_point),
+                                Err(e) => return Err(JsonPretError::LexerError(
+                                    LexerError::new(&e.to_string())
+                                ))
+                            }                
                         }
                         _ => return Err(JsonPretError::LexerError(
                             LexerError::new(&format!("an unexpected escaped char {escaped_c}"))
                         ))
                     }
                 }
-                '"' => {},
-                _ => {}
+                '\"' => {
+                    // 文字列パースの終了時の処理
+                    match self.push_utf16(&mut string, &mut utf16) {
+                        Ok(_) => break,
+                        Err(e) => return Err(e)
+                    }
+                },
+                _ => {
+                    // 普通の文字の時の処理
+                    match self.push_utf16(&mut string, &mut utf16) {
+                        Ok(_) => string.push(c),
+                        Err(e) => return Err(e)
+                    }
+
+                }
             }
         }
         Ok(Token::String(string))
@@ -138,14 +185,31 @@ impl<'a> Lexer<'a> {
 
     /// 指定した文字数を取得する
     fn get_string(&mut self, length: usize) -> String {
-        let mut str: String = String::new();
+        let mut string: String = String::new();
         for _ in 0..length {
             match self.chars.next() {
-                Some(c) => str.push(c),
+                Some(c) => string.push(c),
                 None => {}
             }
         }
-        str
+        string
+    }
+    /// utf16のバッファを文字列に結合する
+    fn push_utf16(&mut self, string: &mut String, utf16: &mut Vec<u16>) -> Result<(), JsonPretError>{
+        if utf16.is_empty() {
+            return Ok(());
+        }
+
+        match String::from_utf16(utf16) {
+            Ok(utf16_str) => {
+                string.push_str(&utf16_str);
+                utf16.clear();
+                Ok(())
+            }
+            Err(e) => return Err(JsonPretError::LexerError(
+                LexerError::new(&e.to_string())
+            ))
+        }
     }
 }
 
@@ -234,6 +298,33 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_string() {
+        let s = "\"hogehoge12345\"";
+        let token = Lexer::new(s).parse_string().unwrap();
+        assert_eq!(token, Token::String("hogehoge12345".to_string()));
+
+        let s = "\"あいうえお\"";
+        let token = Lexer::new(s).parse_string().unwrap();
+        assert_eq!(token, Token::String("あいうえお".to_string()));
+
+        let s = r#""\u3042\u3044\u3046abc""#; //あいうabc
+        let token = Lexer::new(s).parse_string().unwrap();
+        assert_eq!(token, Token::String("あいうabc".to_string()));
+
+        let s = format!(r#"\\b\f\n\r\t\/\""#);
+        let token = Lexer::new(&s).parse_string().unwrap();
+        assert_eq!(
+            token,
+            Token::String(r#"\b\f\n\r\t\/\""#.to_string())
+        );
+
+        let s = r#""\uD83D\uDE04\uD83D\uDE07\uD83D\uDC7A""#;
+        let token = Lexer::new(&s).parse_string().unwrap();
+        assert_eq!(token, Token::String(r#"😄😇👺"#.to_string()));
+    }
+
+
+    #[test]
     fn test_get_string() {
         let expect = String::from("test");
         let mut lexer = Lexer::new("test");
@@ -248,5 +339,85 @@ mod tests {
         assert_eq!(is_number('e', true), false);
         assert_eq!(is_number('e', false), true);
         assert_eq!(is_number('a', false), false);
+    }
+
+    #[test]
+    fn test_lexical_analyze() {
+        let obj = r#"
+        {
+            "number": 123,
+            "boolean": true,
+            "string": "togatoga",
+            "object": {
+               "number": 2E10
+            }
+         }
+         "#;
+        // object
+        let tokens = Lexer::new(obj).lexical_analyze().unwrap();
+        let result_tokens = [
+            // start {
+            Token::LeftBrace,
+            // begin: "number": 123,
+            Token::String("number".to_string()),
+            Token::Colon,
+            Token::Number(123f64),
+            Token::Comma,
+            // end
+
+            // begin: "boolean": true,
+            Token::String("boolean".to_string()),
+            Token::Colon,
+            Token::Bool(true),
+            Token::Comma,
+            // end
+
+            // begin: "string": "togatoga",
+            Token::String("string".to_string()),
+            Token::Colon,
+            Token::String("togatoga".to_string()),
+            Token::Comma,
+            // end
+
+            // begin: "object": {
+            Token::String("object".to_string()),
+            Token::Colon,
+            Token::LeftBrace,
+            // begin: "number": 2E10,
+            Token::String("number".to_string()),
+            Token::Colon,
+            Token::Number(20000000000f64),
+            // end
+            Token::RightBrace,
+            // end
+            Token::RightBrace,
+            // end
+        ];
+        tokens
+            .iter()
+            .zip(result_tokens.iter())
+            .enumerate()
+            .for_each(|(i, (x, y))| {
+                assert_eq!(x, y, "index: {}", i);
+            });
+
+        // array
+        let a = "[true, {\"キー\": null}]";
+        let tokens = Lexer::new(a).lexical_analyze().unwrap();
+        let result_tokens = vec![
+            Token::LeftBracket,
+            Token::Bool(true),
+            Token::Comma,
+            Token::LeftBrace,
+            Token::String("キー".to_string()),
+            Token::Colon,
+            Token::Null,
+            Token::RightBrace,
+            Token::RightBracket,
+        ];
+        tokens
+            .iter()
+            .zip(result_tokens.iter())
+            .for_each(|(x, y)| assert_eq!(x, y));
     }
 }
