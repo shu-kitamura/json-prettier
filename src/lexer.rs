@@ -20,18 +20,18 @@ pub enum Token {
 }
 
 #[derive(Debug)]
-struct Lexer<'a> {
+pub struct Lexer<'a> {
     chars: Peekable<Chars<'a>>
 }
 
 impl<'a> Lexer<'a> {
-    fn new(raw_str: &str) -> Lexer {
+    pub fn new(raw_str: &str) -> Lexer {
         Lexer {
             chars: raw_str.chars().peekable()
         }
     }
 
-    fn lexical_analyze(&mut self) -> Result<Vec<Token>, JsonPretError> {
+    pub fn lexical_analyze(&mut self) -> Result<Vec<Token>, JsonPretError> {
         let mut tokens: Vec<Token> = vec![];
         while let Some(token) = self.next_token().unwrap() {
             match token {

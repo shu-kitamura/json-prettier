@@ -1,3 +1,7 @@
+mod lexer;
+mod parser;
+mod error;
+
 use std::collections::BTreeMap;
 use std::ops::Index;
 
