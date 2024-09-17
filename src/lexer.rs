@@ -124,7 +124,7 @@ impl<'a> Lexer<'a> {
         self.chars.next(); // 最初の " の分を進める。
 
         let mut utf16: Vec<u16> = vec![];
-        let mut string = String::new();
+        let mut string: String = String::new();
 
         while let Some(c) = self.chars.next() {
             match c {
@@ -141,22 +141,11 @@ impl<'a> Lexer<'a> {
                         }
                         'u' => {
                             // utf16の時の処理
-                            let hexs: Vec<char> = (0..4).filter_map(|_| {
-                                let c: char = self.chars.next().unwrap();
-                                if c.is_ascii_hexdigit() {
-                                    Some(c)
-                                } else {
-                                    None
-                                }
-                            }).collect();
-
-                            // 読み込んだ文字列を16新数に変換して、utf16のバッファにpushする
-                            match u16::from_str_radix(&hexs.iter().collect::<String>(), 16) {
-                                Ok(code_point) => utf16.push(code_point),
-                                Err(e) => return Err(JsonPretError::LexerError(
-                                    LexerError::new(&e.to_string())
-                                ))
-                            }                
+                            let code_point = match self.get_code_point() {
+                                Ok(point) => point,
+                                Err(e) => return Err(e),
+                            };
+                            utf16.push(code_point);
                         }
                         _ => return Err(JsonPretError::LexerError(
                             LexerError::new(&format!("an unexpected escaped char {escaped_c}"))
@@ -193,6 +182,26 @@ impl<'a> Lexer<'a> {
             }
         }
         string
+    }
+
+    /// utf16のコードポイントを取得する
+    fn get_code_point(&mut self) -> Result<u16, JsonPretError> {
+        let hexs = (0..4).filter_map(|_| {
+            let c: char = self.chars.next().unwrap();
+            if c.is_ascii_hexdigit() {
+                Some(c)
+            } else {
+                None
+            }
+        });
+
+        // 読み込んだ文字列を16新数に変換して、utf16のバッファにpushする
+        match u16::from_str_radix(&hexs.collect::<String>(), 16) {
+            Ok(code_point) => Ok(code_point),
+            Err(e) => Err(JsonPretError::LexerError(
+                LexerError::new(&e.to_string())
+            ))
+        }
     }
     /// utf16のバッファを文字列に結合する
     fn push_utf16(&mut self, string: &mut String, utf16: &mut Vec<u16>) -> Result<(), JsonPretError>{
