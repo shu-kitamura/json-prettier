@@ -14,11 +14,9 @@ impl Parser {
 }
 
 #[cfg(test)]
-mod testS {
+mod tests {
     use std::collections::BTreeMap;
-    use crate::{
-        lexer::{Token},
-    };
+    use crate::lexer::{Token};
     use super::Parser;
 
     #[test]
