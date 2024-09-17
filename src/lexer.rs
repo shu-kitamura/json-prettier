@@ -5,7 +5,7 @@ use std::{
 use crate::error::{JsonPretError, LexerError};
 
 #[derive(Debug, PartialEq, Clone)]
-enum Token {
+pub enum Token {
     String(String), // 文字列
     Number(f64),    // 数値
     Bool(bool),     // 真偽値
