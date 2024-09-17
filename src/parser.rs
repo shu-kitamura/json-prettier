@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crate::{
     error::{JsonPretError, ParserError},
     lexer::Token,
-    Value
+    JsonObject
 };
 
 pub struct Parser {
@@ -18,7 +18,7 @@ impl Parser {
         Parser { tokens, index: 0 }
     }
 
-    pub fn parse(&mut self) -> Result<Value, JsonPretError>{
+    pub fn parse(&mut self) -> Result<JsonObject, JsonPretError>{
         let peeked_token = match self.peek() {
             Ok(t) => t.clone(),
             Err(e) => return Err(e),
@@ -29,25 +29,25 @@ impl Parser {
             Token::LeftBracket => self.parse_array(),
             Token::Bool(b) => {
                 match self.next() {
-                    Ok(_) => Ok(Value::Bool(b)),
+                    Ok(_) => Ok(JsonObject::Bool(b)),
                     Err(e) => return Err(e)
                 }
             }
             Token::Null => {
                 match self.next() {
-                    Ok(_) => Ok(Value::Null),
+                    Ok(_) => Ok(JsonObject::Null),
                     Err(e) => return Err(e)
                 }                
             }
             Token::Number(n) => {
                 match self.next() {
-                    Ok(_) => Ok(Value::Number(n)),
+                    Ok(_) => Ok(JsonObject::Number(n)),
                     Err(e) => return Err(e)
                 }
             }
             Token::String(s) => {
                 match self.next(){
-                    Ok(_) => Ok(Value::String(s)),
+                    Ok(_) => Ok(JsonObject::String(s)),
                     Err(e) => return Err(e)
                 }
             },
@@ -60,7 +60,7 @@ impl Parser {
         }
     }
 
-    fn parse_array(&mut self) -> Result<Value, JsonPretError>{
+    fn parse_array(&mut self) -> Result<JsonObject, JsonPretError>{
         let token = match self.next() {
             Ok(t) => t.clone(),
             Err(e) => return Err(e)
@@ -72,7 +72,7 @@ impl Parser {
             ))
         }
 
-        let mut array: Vec<Value> = vec![];
+        let mut array: Vec<JsonObject> = vec![];
 
         loop {
             match self.parse() {
@@ -89,15 +89,15 @@ impl Parser {
                 Token::RightBracket => break,
                 Token::Comma => continue,
                 _ => return Err(JsonPretError::ParserError(
-                    ParserError::new(&format!("a '[' or ',' is expected, but '{:?}' is inputed", token))
+                    ParserError::new(&format!("a ']' or ',' is expected, but '{:?}' is inputed", token))
                 ))
             }
         }
 
-        Ok(Value::Array(array))
+        Ok(JsonObject::Array(array))
     }
 
-    fn parse_object(&mut self) -> Result<Value, JsonPretError>{
+    fn parse_object(&mut self) -> Result<JsonObject, JsonPretError>{
         let token = match self.next() {
             Ok(t) => t.clone(),
             Err(e) => return Err(e),
@@ -109,7 +109,7 @@ impl Parser {
             ))
         }
 
-        let mut obj: BTreeMap<String, Value> = BTreeMap::new();
+        let mut obj: BTreeMap<String, JsonObject> = BTreeMap::new();
 
         loop {
             let t1: Token  = match self.next() {
@@ -152,7 +152,7 @@ impl Parser {
             }
         }
 
-        Ok(Value::Object(obj))
+        Ok(JsonObject::Object(obj))
     }
 
     fn peek(&mut self) -> Result<&Token, JsonPretError> {
@@ -179,7 +179,7 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
-    use crate::{lexer::{Lexer, Token}, Value};
+    use crate::{lexer::{Lexer, Token}, JsonObject};
     use super::Parser;
 
     #[test]
@@ -206,11 +206,11 @@ mod tests {
         let mut obj = BTreeMap::new();
         obj.insert(
             "key".to_string(),
-            Value::String("value".to_string())
+            JsonObject::String("JsonObject".to_string())
         );
-        let expect = Value::Object(obj);
+        let expect = JsonObject::Object(obj);
 
-        let mut lexer = Lexer::new(r#"{"key" : "value"}"#);
+        let mut lexer = Lexer::new(r#"{"key" : "JsonObject"}"#);
         let tokens = lexer.lexical_analyze().unwrap();
         let mut parser = Parser::new(tokens);
         let actual = parser.parse_object().unwrap();
@@ -220,11 +220,11 @@ mod tests {
 
     #[test]
     fn test_parse_array() {
-        let expect: Value = Value::Array(vec![
-            Value::Null,
-            Value::Number(1.0),
-            Value::Bool(true),
-            Value::String("test".to_string()),
+        let expect: JsonObject = JsonObject::Array(vec![
+            JsonObject::Null,
+            JsonObject::Number(1.0),
+            JsonObject::Bool(true),
+            JsonObject::String("test".to_string()),
         ]);
 
         let mut lexer = Lexer::new(r#"[null, 1, true, "test"]"#);
@@ -237,25 +237,25 @@ mod tests {
 
     #[test]
     fn test_parse() {
-        let json = r#"{"key" : [1, "value"]}"#;
-        let value = Parser::new(Lexer::new(json).lexical_analyze().unwrap())
+        let json = r#"{"key" : [1, "JsonObject"]}"#;
+        let json_obj = Parser::new(Lexer::new(json).lexical_analyze().unwrap())
             .parse()
             .unwrap();
         let mut object = BTreeMap::new();
         object.insert(
             "key".to_string(),
-            Value::Array(vec![Value::Number(1.0), Value::String("value".to_string())]),
+            JsonObject::Array(vec![JsonObject::Number(1.0), JsonObject::String("JsonObject".to_string())]),
         );
-        assert_eq!(value, Value::Object(object));
+        assert_eq!(json_obj, JsonObject::Object(object));
 
-        let json = r#"[{"key": "value"}]"#;
-        let value = Parser::new(Lexer::new(json).lexical_analyze().unwrap())
+        let json = r#"[{"key": "JsonObject"}]"#;
+        let json_obj = Parser::new(Lexer::new(json).lexical_analyze().unwrap())
             .parse()
             .unwrap();
         let mut object = BTreeMap::new();
-        object.insert("key".to_string(), Value::String("value".to_string()));
+        object.insert("key".to_string(), JsonObject::String("JsonObject".to_string()));
 
-        let array = Value::Array(vec![Value::Object(object)]);
-        assert_eq!(value, array);
+        let array = JsonObject::Array(vec![JsonObject::Object(object)]);
+        assert_eq!(json_obj, array);
     }
 }
